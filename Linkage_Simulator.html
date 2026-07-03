@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ME252 — 4-Bar Linkage Synthesizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --border: #1e1e2e;
+    --accent: #00e5ff;
+    --accent2: #ff6b35;
+    --accent3: #a8ff78;
+    --text: #e8e8f0;
+    --muted: #5a5a7a;
+    --grid: rgba(0,229,255,0.04);
+    --c1: #ff6b6b;
+    --c2: #ffd93d;
+    --c3: #6bcb77;
+    --c4: #4d96ff;
+    --crank: #ff6b35;
+    --coupler: #00e5ff;
+    --rocker: #a8ff78;
+    --ground: #888;
+  }
+  .coord-input {
+  padding: 6px;
+  font-size: 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: rgba(0,0,0,0.4);
+  color: var(--text);
+}
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    grid-template-rows: auto 1fr;
+    height: 100vh;
+    position: relative;
+    z-index: 1;
+  }
+
+  header {
+    grid-column: 1/-1;
+    padding: 14px 24px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    background: rgba(10,10,15,0.8);
+    backdrop-filter: blur(8px);
+  }
+
+  header h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 18px;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+  }
+
+  header span {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .sidebar {
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+    height: calc(100vh - 48px);
+  }
+
+  .panel {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+  }
+
+  .panel-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .step-badge {
+    background: var(--accent);
+    color: var(--bg);
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .step-desc {
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 10px;
+  }
+
+  .point-list { display: flex; flex-direction: column; gap: 5px; }
+
+  .point-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 6px;
+    border: 1px solid transparent;
+    font-size: 11px;
+    transition: border-color 0.2s;
+  }
+
+  .point-item.active { border-color: var(--accent); }
+  .point-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .point-label { font-weight: 700; width: 20px; }
+  .point-coords { color: var(--muted); font-size: 10px; flex: 1; text-align: right; }
+
+  .btn {
+    padding: 9px 14px;
+    border: none;
+    border-radius: 6px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+  }
+
+  .btn-primary { background: var(--accent); color: var(--bg); }
+  .btn-primary:hover { background: #33eaff; transform: translateY(-1px); }
+  .btn-primary:disabled { background: var(--muted); cursor: not-allowed; transform: none; }
+  .btn-danger { background: transparent; color: var(--accent2); border: 1px solid var(--accent2); }
+  .btn-danger:hover { background: var(--accent2); color: var(--bg); }
+  .btn-secondary { background: transparent; color: var(--accent3); border: 1px solid var(--accent3); }
+  .btn-secondary:hover { background: var(--accent3); color: var(--bg); }
+
+  .btn-row { display: flex; gap: 6px; margin-top: 10px; }
+
+  .info-log {
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.8;
+    max-height: 100px;
+    overflow-y: auto;
+    padding: 8px;
+    background: rgba(0,0,0,0.4);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+
+  .info-log .log-ok { color: var(--accent3); }
+  .info-log .log-warn { color: var(--accent2); }
+  .info-log .log-info { color: var(--accent); }
+
+  .linkage-info { display: flex; flex-direction: column; gap: 4px; }
+
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    padding: 3px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .info-row .label { color: var(--muted); }
+  .info-row .value { color: var(--text); font-weight: 700; }
+
+  .grashof-badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+
+  .grashof-ok { background: rgba(168,255,120,0.15); color: var(--accent3); border: 1px solid var(--accent3); }
+  .grashof-fail { background: rgba(255,107,53,0.15); color: var(--accent2); border: 1px solid var(--accent2); }
+
+  .anim-controls { display: flex; gap: 8px; align-items: center; }
+  .anim-controls input[type=range] { flex: 1; accent-color: var(--accent); }
+
+  .play-btn {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: var(--bg); flex-shrink: 0;
+    transition: all 0.2s;
+  }
+
+  .play-btn:hover { transform: scale(1.1); }
+
+  .speed-control { display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--muted); margin-top: 8px; }
+  .speed-control input { width: 80px; accent-color: var(--accent); }
+
+  .progress-bar {
+    height: 3px; background: var(--border); border-radius: 2px; overflow: hidden;
+    display: none; margin-top: 8px;
+  }
+
+  .progress-fill {
+    height: 100%; background: var(--accent); width: 0%;
+    transition: width 0.05s linear;
+  }
+
+  .status-badge {
+    display: inline-block;
+    font-size: 9px; padding: 2px 8px;
+    border-radius: 4px; font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .badge-info { background: rgba(0,229,255,0.1); color: var(--accent); border: 1px solid rgba(0,229,255,0.3); }
+  .badge-ok { background: rgba(168,255,120,0.1); color: var(--accent3); border: 1px solid rgba(168,255,120,0.3); }
+  .badge-warn { background: rgba(255,107,53,0.1); color: var(--accent2); border: 1px solid rgba(255,107,53,0.3); }
+
+  .canvas-area { position: relative; overflow: hidden; }
+
+  canvas {
+    display: block;
+    width: 100%; height: 100%;
+    cursor: crosshair;
+  }
+
+  .canvas-hint {
+    position: absolute;
+    bottom: 14px; left: 50%; transform: translateX(-50%);
+    font-size: 10px; color: var(--muted);
+    background: rgba(10,10,15,0.9);
+    padding: 5px 12px; border-radius: 20px;
+    border: 1px solid var(--border);
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  .phase-indicator {
+    position: absolute; top: 12px; right: 12px;
+    background: rgba(10,10,15,0.9);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 10px; color: var(--accent);
+    font-family: 'Syne', sans-serif; font-weight: 600;
+    letter-spacing: 1px;
+  }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .coord-input {
+  padding: 6px;
+  font-size: 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: rgba(0,0,0,0.4);
+  color: var(--text);
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <header>
+    <h1>4-BAR LINKAGE SYNTHESIZER</h1>
+    <span>Burmester Theory · Freudenstein Equations · DE Optimization</span>
+  </header>
+
+  <aside class="sidebar">
+    <!-- PHASE 1 -->
+    <div class="panel" id="panel-phase1">
+      <div class="panel-title"><span class="step-badge">1</span>Precision Points</div>
+      <div class="step-desc">Click canvas to place 4 precision points C₁–C₄ that the coupler point must trace.</div>
+      <div class="point-list">
+        <div style="margin-top:10px">
+  <div style="font-size:10px;color:var(--muted);margin-bottom:6px">
+    Or enter coordinates manually:
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <input id="coord-0" placeholder="C1: x,y or (x,y)" class="coord-input">
+    <input id="coord-1" placeholder="C2: x,y or (x,y)" class="coord-input">
+    <input id="coord-2" placeholder="C3: x,y or (x,y)" class="coord-input">
+    <input id="coord-3" placeholder="C4: x,y or (x,y)" class="coord-input">
+  </div>
+
+  <button class="btn btn-secondary" style="margin-top:8px" onclick="loadCoordinates()">
+    Load Coordinates
+  </button>
+</div>
+        <div class="point-item" id="pi-0"><div class="point-dot" style="background:var(--c1)"></div><span class="point-label">C₁</span><span class="point-coords" id="pc-0">— not placed —</span></div>
+        <div class="point-item" id="pi-1"><div class="point-dot" style="background:var(--c2)"></div><span class="point-label">C₂</span><span class="point-coords" id="pc-1">— not placed —</span></div>
+        <div class="point-item" id="pi-2"><div class="point-dot" style="background:var(--c3)"></div><span class="point-label">C₃</span><span class="point-coords" id="pc-2">— not placed —</span></div>
+        <div class="point-item" id="pi-3"><div class="point-dot" style="background:var(--c4)"></div><span class="point-label">C₄</span><span class="point-coords" id="pc-3">— not placed —</span></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-danger" style="flex:1" onclick="resetAll()">Reset</button>
+        <button class="btn btn-primary" id="btn-synthesize" style="flex:2" onclick="startSynthesis()" disabled>Synthesize →</button>
+      </div>
+      <div class="progress-bar" id="prog"><div class="progress-fill" id="pb"></div></div>
+      <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
+        <span class="status-badge badge-info" id="sbadge">place points</span>
+        <span style="font-size:10px;color:var(--muted)" id="smsg"></span>
+      </div>
+    </div>
+
+    <!-- RESULTS -->
+    <div class="panel" id="panel-results" style="opacity:0.4;pointer-events:none">
+      <div class="panel-title"><span class="step-badge">2</span>Linkage Properties</div>
+      <div class="linkage-info" id="linkage-info">
+        <div style="font-size:10px;color:var(--muted)">— synthesize to see results —</div>
+      </div>
+    </div>
+
+    <!-- ANIMATION -->
+    <div class="panel" id="panel-anim" style="opacity:0.4;pointer-events:none">
+      <div class="panel-title"><span class="step-badge">3</span>Animation</div>
+      <div class="anim-controls">
+        <button class="play-btn" id="play-btn" onclick="togglePlay()">▶</button>
+        <input type="range" id="crank-slider" min="0" max="360" value="0" oninput="sliderMove(this.value)">
+      </div>
+      <div class="speed-control">
+        Speed:
+        <input type="range" id="speed-slider" min="0.2" max="5" step="0.2" value="1">
+        <span id="speed-val">1×</span>
+      </div>
+      <div style="margin-top:10px">
+        <button class="btn btn-secondary" onclick="toggleCoupler()">Toggle Coupler Curve</button>
+      </div>
+    </div>
+
+    <!-- LOG -->
+    <div class="panel">
+      <div class="panel-title">Construction Log</div>
+      <div class="info-log" id="log">
+        <span class="log-info">→ Place 4 precision points on the canvas</span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="canvas-area">
+    <canvas id="canvas"></canvas>
+    <div class="canvas-hint" id="hint">Click to place C₁</div>
+    <div class="phase-indicator" id="phase-ind">PHASE 1 · PLACE POINTS</div>
+  </main>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CANVAS + STATE
+// ═══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+let phase = 1;
+let precisionPts = [];
+let linkage = null;
+let animating = false;
+let crankAngle = 0;
+let showCoupler = true;
+let couplerCurve = [];
+let lastTime = null;
+let rockerDir = 1;
+let isRocker = false;
+let busy = false;
+let validArcs = [];
+let animArcI = 0, animPosI = 0;
+let animId = null;
+
+let camX = 0, camY = 0, camScale = 1;
+let panStart = null;
+
+const COLORS = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff'];
+const LABELS = ['C₁','C₂','C₃','C₄'];
+
+function logMsg(msg, type='info') {
+  const el = document.getElementById('log');
+  const cls = {info:'log-info', ok:'log-ok', warn:'log-warn'}[type] || 'log-info';
+  el.innerHTML += `<br><span class="${cls}">→ ${msg}</span>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CANVAS RESIZE + COORDINATE TRANSFORMS
+// ═══════════════════════════════════════════════════════════════
+function resize() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width;
+  canvas.height = rect.height;
+  draw();
+}
+window.addEventListener('resize', resize);
+resize();
+
+function w2s(wx, wy) {
+  return [canvas.width/2 + (wx - camX)*camScale, canvas.height/2 - (wy - camY)*camScale];
+}
+function s2w(sx, sy) {
+  return [(sx - canvas.width/2)/camScale + camX, -(sy - canvas.height/2)/camScale + camY];
+}
+function inBounds(wx, wy) {
+  const [sx,sy] = w2s(wx,wy);
+  return sx > 0 && sx < canvas.width && sy > 0 && sy < canvas.height;
+}
+
+// Helper: parse coordinate string like "(x,y)" or "x,y"
+function parseCoord(val) {
+  if (!val) return null;
+  const clean = val.replace(/[()]/g, '').trim();
+  const parts = clean.split(',').map(s => s.trim());
+  if (parts.length !== 2) return null;
+  const x = parseFloat(parts[0]), y = parseFloat(parts[1]);
+  if (isNaN(x) || isNaN(y)) return null;
+  return { x, y };
+}
+
+// Global loader for the coordinate inputs
+function loadCoordinates() {
+  if (busy) return;
+  precisionPts = [];
+  for (let i = 0; i < 4; i++) {
+    const el = document.getElementById(`coord-${i}`);
+    if (!el) { alert('Coordinate inputs missing'); return; }
+    const val = el.value.trim();
+    const p = parseCoord(val);
+    if (!p) { alert(`Invalid format for C${i+1}. Use x,y or (x,y)`); return; }
+    precisionPts.push(p);
+    document.getElementById(`pc-${i}`).textContent = `(${p.x.toFixed(1)}, ${p.y.toFixed(1)})`;
+    document.getElementById(`pi-${i}`).classList.add('active');
+    logMsg(`Loaded C${i+1} at (${p.x.toFixed(1)}, ${p.y.toFixed(1)})`);
+  }
+  if (precisionPts.length === 4) {
+    document.getElementById('btn-synthesize').disabled = false;
+    document.getElementById('hint').textContent = '4 points loaded — click Synthesize';
+    document.getElementById('phase-ind').textContent = 'PHASE 1 · COMPLETE';
+    document.getElementById('sbadge').textContent = 'ready';
+    document.getElementById('sbadge').className = 'status-badge badge-ok';
+    fitToPoints();
+    draw();
+  } else {
+    alert('Please enter all 4 points.');
+  }
+}
+
+// Center and scale view to fit precision points
+function fitToPoints(pad = 40) {
+  if (!precisionPts || precisionPts.length === 0) return;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of precisionPts) {
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+  }
+  const w = Math.max(10, maxX - minX);
+  const h = Math.max(10, maxY - minY);
+  const scaleX = (canvas.width - 2 * pad) / w;
+  const scaleY = (canvas.height - 2 * pad) / h;
+  camScale = Math.max(0.2, Math.min(10, Math.min(scaleX, scaleY)));
+  camX = (minX + maxX) / 2;
+  camY = (minY + maxY) / 2;
+  draw();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MOUSE EVENTS
+// ═══════════════════════════════════════════════════════════════
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 1 || e.button === 2) { panStart = [e.clientX, e.clientY, camX, camY]; return; }
+  const rect = canvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+  if (phase === 1 && !busy) handleClick(sx, sy);
+});
+canvas.addEventListener('mousemove', e => {
+  if (!panStart) return;
+  camX = panStart[2] - (e.clientX - panStart[0])/camScale;
+  camY = panStart[3] + (e.clientY - panStart[1])/camScale;
+  draw();
+});
+canvas.addEventListener('mouseup', () => panStart = null);
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  camScale = Math.max(0.2, Math.min(10, camScale * (e.deltaY < 0 ? 1.1 : 0.9)));
+  draw();
+}, {passive:false});
+
+function handleClick(sx, sy) {
+  if (precisionPts.length >= 4) return;
+  const [wx, wy] = s2w(sx, sy);
+  precisionPts.push({x: wx, y: wy});
+  const idx = precisionPts.length - 1;
+  document.getElementById(`pc-${idx}`).textContent = `(${wx.toFixed(1)}, ${wy.toFixed(1)})`;
+  document.getElementById(`pi-${idx}`).classList.add('active');
+  logMsg(`Placed ${LABELS[idx]} at (${wx.toFixed(1)}, ${wy.toFixed(1)})`);
+  if (precisionPts.length === 4) {
+    document.getElementById('btn-synthesize').disabled = false;
+    document.getElementById('hint').textContent = '4 points placed — click Synthesize';
+    document.getElementById('phase-ind').textContent = 'PHASE 1 · COMPLETE';
+    document.getElementById('sbadge').textContent = 'ready';
+    document.getElementById('sbadge').className = 'status-badge badge-ok';
+  } else {
+    document.getElementById('hint').textContent = `Click to place ${LABELS[precisionPts.length]}`;
+  }
+  draw();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GEOMETRY HELPERS
+// ═══════════════════════════════════════════════════════════════
+function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+function midpoint(a, b) { return {x:(a.x+b.x)/2, y:(a.y+b.y)/2}; }
+function perpBisector(a, b) {
+  const m = midpoint(a,b);
+  const dx = b.x-a.x, dy = b.y-a.y;
+  return {point:m, dx:-dy, dy:dx};
+}
+function lineIntersect(p1, d1, p2, d2) {
+  const denom = d1.dx*d2.dy - d1.dy*d2.dx;
+  if (Math.abs(denom) < 1e-10) return null;
+  const dx = p2.x-p1.x, dy = p2.y-p1.y;
+  const t = (dx*d2.dy - dy*d2.dx)/denom;
+  return {x: p1.x + t*d1.dx, y: p1.y + t*d1.dy};
+}
+function circumcenter(p1, p2, p3) {
+  const D = 2*(p1.x*(p2.y-p3.y)+p2.x*(p3.y-p1.y)+p3.x*(p1.y-p2.y));
+  if (Math.abs(D) < 1e-10) return null;
+  const ux = ((p1.x*p1.x+p1.y*p1.y)*(p2.y-p3.y)+(p2.x*p2.x+p2.y*p2.y)*(p3.y-p1.y)+(p3.x*p3.x+p3.y*p3.y)*(p1.y-p2.y))/D;
+  const uy = ((p1.x*p1.x+p1.y*p1.y)*(p3.x-p2.x)+(p2.x*p2.x+p2.y*p2.y)*(p1.x-p3.x)+(p3.x*p3.x+p3.y*p3.y)*(p2.x-p1.x))/D;
+  return {x:ux, y:uy};
+}
+function circleIntersect(c1, r1, c2, r2) {
+  const d = dist(c1, c2);
+  if (d > r1+r2 || d < Math.abs(r1-r2) || d < 1e-9) return null;
+  const a = (r1*r1 - r2*r2 + d*d)/(2*d);
+  const h = Math.sqrt(Math.max(0, r1*r1-a*a));
+  const mx = c1.x + a*(c2.x-c1.x)/d, my = c1.y + a*(c2.y-c1.y)/d;
+  const px = h*(c2.y-c1.y)/d, py = -h*(c2.x-c1.x)/d;
+  return [{x:mx+px, y:my+py},{x:mx-px, y:my-py}];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BURMESTER THEORY — Complex number path for dyads
+// ═══════════════════════════════════════════════════════════════
+class C {
+  constructor(r, i=0) { this.r=r; this.i=i; }
+  add(c) { return new C(this.r+c.r, this.i+c.i); }
+  sub(c) { return new C(this.r-c.r, this.i-c.i); }
+  mul(c) { return new C(this.r*c.r-this.i*c.i, this.r*c.i+this.i*c.r); }
+  div(c) { const d=c.r*c.r+c.i*c.i; return new C((this.r*c.r+this.i*c.i)/d,(this.i*c.r-this.r*c.i)/d); }
+  conj() { return new C(this.r,-this.i); }
+  mag() { return Math.sqrt(this.r*this.r+this.i*this.i); }
+  arg() { return Math.atan2(this.i,this.r); }
+}
+function ex(ang) { return new C(Math.cos(ang), Math.sin(ang)); }
+
+// Compute Burmester dyad from 4 precision points + crank angles + free choice gamma
+// pts: [{x,y}], phi: crank rotation angles [0, phi1, phi2, phi3], gam2: free choice
+function burmesterDyad(pts, phi, gam2) {
+  // Convert pts to complex numbers relative to pt[0]
+  const R = pts.map(p => new C(p.x, p.y));
+  const d = [new C(0), R[1].sub(R[0]), R[2].sub(R[0]), R[3].sub(R[0])];
+  const e = ang => ex(ang).sub(new C(1));
+  const D2 = d[2].mul(e(phi[3])).sub(d[3].mul(e(phi[2])));
+  const D3 = d[3].mul(e(phi[1])).sub(d[1].mul(e(phi[3])));
+  const D4 = d[1].mul(e(phi[2])).sub(d[2].mul(e(phi[1])));
+  const D1 = ex(gam2).mul(D2).sub(D3).sub(D4);
+
+  const A = D1.conj().mul(D3).r;
+  const B = D1.conj().mul(D3).i;
+  const Cv = D1.mag()*D1.mag() + D3.mag()*D3.mag() - D4.mag()*D4.mag();
+
+  const disc = 4*A*A + 4*B*B - Cv*Cv;
+  if (disc < 0) return null;
+
+  const gam3 = 2*Math.atan((2*B - Math.sqrt(disc))/(Cv - 2*A));
+  const num = D1.add(ex(gam3).mul(D3));
+  const den = D4.mul(new C(-1));
+  const q = num.div(den);
+  const gam4 = Math.atan2(q.i, q.r);
+
+  const aa11 = e(phi[1]), aa12 = ex(gam2).sub(new C(1));
+  const aa21 = e(phi[2]), aa22 = ex(gam3).sub(new C(1));
+
+  // Actually use the simpler Burmester form: solve for Z2, Z3 (dyad vectors)
+  // Using positions 1 and 2:
+  // Z2*(e^(i*phi[1])-1) + Z3*(e^(i*gam2)-1) = d[1]
+  // Z2*(e^(i*phi[2])-1) + Z3*(e^(i*gam3)-1) = d[2]
+  const lhs11 = e(phi[1]);
+  const lhs12 = ex(gam2).sub(new C(1));
+  const lhs21 = e(phi[2]);
+  const lhs22 = ex(gam3).sub(new C(1));
+  const det = lhs11.mul(lhs22).sub(lhs12.mul(lhs21));
+  if (det.mag() < 1e-10) return null;
+
+  const Z2 = lhs22.mul(d[1]).sub(lhs12.mul(d[2])).div(det);
+  const Z3 = lhs11.mul(d[2]).sub(lhs21.mul(d[1])).div(det);
+  const Z0 = R[0].sub(Z2).sub(Z3);
+  return { Z0, Z2, Z3, gam3, gam4 };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FREUDENSTEIN EQUATIONS — link length calculation
+// Given fixed pivots O2 (HR), O4 (HC) and coupler point traces,
+// use Freudenstein's method to determine crank/coupler/rocker lengths
+// that minimise error across all precision positions.
+// ═══════════════════════════════════════════════════════════════
+// Freudenstein equation: K1*cos(theta4) - K2*cos(theta2) + K3 = cos(theta2 - theta4)
+// where K1 = d/a, K2 = d/c, K3 = (a^2 - b^2 + c^2 + d^2)/(2ac)
+// a=crank, b=coupler, c=rocker, d=ground
+// Fit K1,K2,K3 from 3+ data rows, then extract link lengths.
+function freudensteinSolve(HR, HC, crankPts, rockerPts) {
+  // crankPts: positions of crank pin (A) in world coords
+  // rockerPts: positions of rocker pin (B) in world coords
+  const n = crankPts.length;
+  if (n < 3) return null;
+
+  const groundLen = dist(HR, HC);
+  if (groundLen < 1e-6) return null;
+
+  // Compute theta2 (crank angle from positive x) and theta4 (rocker angle) for each position
+  const theta2 = crankPts.map(A => Math.atan2(A.y - HR.y, A.x - HR.x));
+  const theta4 = rockerPts.map(B => Math.atan2(B.y - HC.y, B.x - HC.x));
+  const a_crank = crankPts.map(A => dist(A, HR));
+  const c_rocker = rockerPts.map(B => dist(B, HC));
+
+  // Average crank and rocker lengths
+  const crankLen = a_crank.reduce((s,v) => s+v, 0)/n;
+  const rockerLen = c_rocker.reduce((s,v) => s+v, 0)/n;
+
+  // Build linear system for K1, K2, K3:
+  // [cos(th4), -cos(th2), 1] * [K1,K2,K3]^T = cos(th2-th4)
+  // Solve via least squares (normal equations for overdetermined system)
+  let A11=0,A12=0,A13=0,A22=0,A23=0,A33=0;
+  let b1=0,b2=0,b3=0;
+  for (let i=0; i<n; i++) {
+    const r1=Math.cos(theta4[i]), r2=-Math.cos(theta2[i]), r3=1;
+    const rhs=Math.cos(theta2[i]-theta4[i]);
+    A11+=r1*r1; A12+=r1*r2; A13+=r1*r3;
+    A22+=r2*r2; A23+=r2*r3; A33+=r3*r3;
+    b1+=r1*rhs; b2+=r2*rhs; b3+=r3*rhs;
+  }
+  // 3x3 symmetric solve
+  const mat = [[A11,A12,A13],[A12,A22,A23],[A13,A23,A33]];
+  const rhs = [b1,b2,b3];
+  const K = solve3x3(mat, rhs);
+  if (!K) return null;
+  const [K1,K2,K3] = K;
+
+  // From K1=d/a, K2=d/c: a = d/K1, c = d/K2
+  // From K3=(a^2-b^2+c^2+d^2)/(2ac): b^2 = a^2+c^2+d^2-2ac*K3
+  const d = groundLen;
+  const a = Math.abs(K1) > 1e-6 ? d/K1 : crankLen;
+  const c = Math.abs(K2) > 1e-6 ? d/K2 : rockerLen;
+  const bsq = a*a + c*c + d*d - 2*a*c*K3;
+  const b = bsq > 0 ? Math.sqrt(bsq) : null;
+
+  return { crankLen: a, couplerLen: b, rockerLen: c, groundLen: d, K1, K2, K3 };
+}
+
+function solve3x3(M, b) {
+  // Gaussian elimination
+  const A = M.map((r,i) => [...r, b[i]]);
+  for (let col=0; col<3; col++) {
+    let mx=Math.abs(A[col][col]), mxr=col;
+    for (let r=col+1;r<3;r++) if(Math.abs(A[r][col])>mx){mx=Math.abs(A[r][col]);mxr=r;}
+    if(mxr!==col){[A[col],A[mxr]]=[A[mxr],A[col]];}
+    if(Math.abs(A[col][col])<1e-12) return null;
+    for(let r=col+1;r<3;r++){
+      const f=A[r][col]/A[col][col];
+      for(let c=col;c<=3;c++) A[r][c]-=f*A[col][c];
+    }
+  }
+  const x=[0,0,0];
+  for(let r=2;r>=0;r--){
+    x[r]=A[r][3];
+    for(let c=r+1;c<3;c++) x[r]-=A[r][c]*x[c];
+    x[r]/=A[r][r];
+  }
+  return x;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DIFFERENTIAL EVOLUTION OPTIMIZER (from result.html)
+// ═══════════════════════════════════════════════════════════════
+function de(fn, bounds, pop, gen, onP) {
+  const D = bounds.length;
+  let P = Array.from({length:pop}, () => bounds.map(([l,h]) => l + Math.random()*(h-l)));
+  let Co = P.map(fn);
+  let bi = Co.reduce((b,c,i) => c < Co[b] ? i : b, 0);
+  for (let g=0; g<gen; g++) {
+    if (g%40===0 && onP) onP(g/gen);
+    for (let i=0; i<pop; i++) {
+      let a,b,c;
+      do{a=~~(Math.random()*pop);}while(a===i);
+      do{b=~~(Math.random()*pop);}while(b===i||b===a);
+      do{c=~~(Math.random()*pop);}while(c===i||c===a||c===b);
+      const jr=~~(Math.random()*D);
+      const t = P[i].map((x,j) => {
+        if (Math.random()<0.9||j===jr) {
+          const v=P[a][j]+0.8*(P[b][j]-P[c][j]);
+          return Math.max(bounds[j][0],Math.min(bounds[j][1],v));
+        }
+        return x;
+      });
+      const tc=fn(t);
+      if (tc<=Co[i]){P[i]=t;Co[i]=tc;if(tc<Co[bi])bi=i;}
+    }
+  }
+  return {vec:P[bi], cost:Co[bi]};
+}
+
+function localSearch(vec, fn, bounds) {
+  let best=[...vec], bc=fn(vec);
+  for (let it=0;it<3000;it++) {
+    const j=~~(Math.random()*vec.length);
+    const s=(bounds[j][1]-bounds[j][0])*0.007*(1-it/3000);
+    const t=[...best];
+    t[j]=Math.max(bounds[j][0],Math.min(bounds[j][1],t[j]+(Math.random()-0.5)*2*s));
+    const c=fn(t); if(c<bc){bc=c;best=t;}
+  }
+  return {vec:best,cost:bc};
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FORWARD KINEMATICS SOLVER (Freudenstein / cosine law)
+// Given linkage params and crank angle, returns joint positions
+// ═══════════════════════════════════════════════════════════════
+function computePos(theta, lk, branch) {
+  const { HR, HC, crankLen, couplerLen, rockerLen, cpOx, cpOy } = lk;
+  const Ax = HR.x + crankLen*Math.cos(theta);
+  const Ay = HR.y + crankLen*Math.sin(theta);
+  const dx = HC.x - Ax, dy = HC.y - Ay;
+  const d = Math.hypot(dx, dy);
+  if (d < 1e-6 || d > couplerLen+rockerLen || d < Math.abs(couplerLen-rockerLen)) return null;
+  const av = (couplerLen*couplerLen - rockerLen*rockerLen + d*d)/(2*d);
+  const hh = Math.max(0, couplerLen*couplerLen - av*av);
+  const h = Math.sqrt(hh);
+  const mx = Ax + av*dx/d, my = Ay + av*dy/d;
+  const sign = branch > 0 ? 1 : -1;
+  const B = {x: mx + sign*h*(-dy/d), y: my + sign*h*(dx/d)};
+  const ABang = Math.atan2(B.y-Ay, B.x-Ax);
+  const cos = Math.cos(ABang), sin = Math.sin(ABang);
+  const C = {x: Ax + cpOx*cos - cpOy*sin, y: Ay + cpOx*sin + cpOy*cos};
+  return {A:{x:Ax,y:Ay}, B, C};
+}
+
+// ═══════════════════════════════════════════════════════════════
+// COST FUNCTION for DE optimizer
+// vec = [a0x, a0y, b0x, b0y, r1(crank), r2(coupler), r3(rocker), cp, cd, t1,t2,t3,t4]
+// ═══════════════════════════════════════════════════════════════
+function makeBounds() {
+  const W=canvas.width, H=canvas.height, PAD=40;
+  const maxR = Math.min(W,H)*0.4;
+  return [
+    [PAD,W-PAD],[PAD,H-PAD],[PAD,W-PAD],[PAD,H-PAD],
+    [10,maxR],[10,maxR],[10,maxR],[10,maxR],[-Math.PI,Math.PI],
+    [-Math.PI,Math.PI],[-Math.PI,Math.PI],[-Math.PI,Math.PI],[-Math.PI,Math.PI]
+  ];
+}
+
+function costFn(vec, sign, tgts) {
+  const [a0x,a0y,b0x,b0y,r1,r2,r3,cp,cd,t1,t2,t3,t4] = vec;
+  if (r1<8||r2<8||r3<8||cp<8) return 1e12;
+  const W=canvas.width, H=canvas.height, P=40;
+  if (a0x<P||a0x>W-P||a0y<P||a0y>H-P) return 1e12;
+  if (b0x<P||b0x>W-P||b0y<P||b0y>H-P) return 1e12;
+  const lk = buildLinkageFromVec(vec);
+  let tot = 0;
+  for (const [i,th] of [[0,t1],[1,t2],[2,t3],[3,t4]]) {
+    const pt = computePos(th, lk, sign);
+    if (!pt) return 1e12;
+    const {ax:pax,ay:pay} = {ax:pt.A.x,ay:pt.A.y};
+    if (pt.A.x<P||pt.A.x>W-P||pt.A.y<P||pt.A.y>H-P) return 1e12;
+    if (pt.B.x<P||pt.B.x>W-P||pt.B.y<P||pt.B.y>H-P) return 1e12;
+    if (pt.C.x<P||pt.C.x>W-P||pt.C.y<P||pt.C.y>H-P) return 1e12;
+    // Target is in world coords, need canvas coords
+    const [tsx,tsy] = w2s(tgts[i].x, tgts[i].y);
+    tot += (pt.C.x-tsx)**2 + (pt.C.y-tsy)**2;
+  }
+  return tot;
+}
+
+function buildLinkageFromVec(vec) {
+  const [a0x,a0y,b0x,b0y,r1,r2,r3,cp,cd] = vec;
+  return {
+    HR:{x:a0x,y:a0y}, HC:{x:b0x,y:b0y},
+    crankLen:r1, couplerLen:r2, rockerLen:r3,
+    cpOx:cp*Math.cos(cd), cpOy:cp*Math.sin(cd)
+  };
+}
+
+function buildValidArcs(lk, sign) {
+  const N=720, step=(2*Math.PI)/N;
+  const valid=[];
+  for (let i=0;i<N;i++) {
+    const th = -Math.PI + i*step;
+    const pt = computePos(th, lk, sign);
+    const W=canvas.width, H=canvas.height, P=40;
+    if (pt && pt.A.x>P && pt.A.x<W-P && pt.A.y>P && pt.A.y<H-P
+           && pt.B.x>P && pt.B.x<W-P && pt.B.y>P && pt.B.y<H-P
+           && pt.C.x>P && pt.C.x<W-P && pt.C.y>P && pt.C.y<H-P) {
+      valid.push(th);
+    }
+  }
+  const arcs=[]; let cur=null;
+  for (let i=0;i<valid.length;i++){
+    if(!cur){cur=[valid[i]];continue;}
+    if(valid[i]-valid[i-1]<step*2) cur.push(valid[i]);
+    else{arcs.push(cur);cur=[valid[i]];}
+  }
+  if(cur&&cur.length) arcs.push(cur);
+  return arcs;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MAIN SYNTHESIS PIPELINE
+// 1. Burmester theory to get candidate pivot positions
+// 2. Freudenstein equations to refine link lengths
+// 3. DE optimization for best-fit result
+// ═══════════════════════════════════════════════════════════════
+async function startSynthesis() {
+  if (busy || precisionPts.length < 4) return;
+  busy = true;
+  linkage = null;
+  document.getElementById('btn-synthesize').disabled = true;
+  document.getElementById('sbadge').textContent = 'computing';
+  document.getElementById('sbadge').className = 'status-badge badge-warn';
+  document.getElementById('smsg').textContent = 'Burmester + Freudenstein...';
+  document.getElementById('prog').style.display = 'block';
+  document.getElementById('phase-ind').textContent = 'SYNTHESIZING...';
+  if (animId) { cancelAnimationFrame(animId); animId = null; }
+  await new Promise(r => setTimeout(r, 20));
+
+  logMsg('--- Synthesis Begin ---', 'info');
+  logMsg('Phase 1: Burmester dyad analysis', 'info');
+
+  // Burmester phase: derive candidate pivots using complex-number method
+  // Use 3 crank angle assumptions (common defaults for 4-position problem)
+  const phi = [0, 45, 90, 135].map(d => d*Math.PI/180);
+
+  // Try multiple gamma values to find valid dyad solutions
+  let burmesterCandidates = [];
+  for (let g1 = 0; g1 < 360; g1 += 30) {
+    for (let g2 = 0; g2 < 360; g2 += 30) {
+      const d1 = burmesterDyad(precisionPts, phi, g1*Math.PI/180);
+      const d2 = burmesterDyad(precisionPts, phi, g2*Math.PI/180);
+      if (d1 && d2) {
+        burmesterCandidates.push({d1, d2, g1, g2});
+        if (burmesterCandidates.length >= 20) break;
+      }
+    }
+    if (burmesterCandidates.length >= 20) break;
+  }
+  logMsg(`Burmester: ${burmesterCandidates.length} candidate dyad pairs found`, burmesterCandidates.length > 0 ? 'ok' : 'warn');
+
+  // Freudenstein phase: from Burmester pivots, compute link lengths
+  let freudCandidates = [];
+  for (const cand of burmesterCandidates) {
+    // Z0 is pivot of dyad 1 (crank pivot HR), d2.Z0 is rocker pivot HC
+    // In Burmester: Z0 + Z2*e^(i*phi) + Z3*e^(i*gam) = precision point
+    // Approximate crank/rocker pins for each precision position
+    const {d1, d2} = cand;
+    const HR_c = {x: d1.Z0.r, y: d1.Z0.i};
+    const HC_c = {x: d2.Z0.r, y: d2.Z0.i};
+    
+    // Crank pins: Z0 + Z2*(rotated) for each position
+    const crankPins = precisionPts.map((p, i) => {
+      const ang = phi[i];
+      const Z2r = {x: d1.Z2.r*Math.cos(ang)-d1.Z2.i*Math.sin(ang), y: d1.Z2.r*Math.sin(ang)+d1.Z2.i*Math.cos(ang)};
+      return {x: d1.Z0.r + Z2r.x, y: d1.Z0.i + Z2r.y};
+    });
+    const rockerPins = precisionPts.map((p, i) => {
+      const ang = phi[i];
+      const Z2r = {x: d2.Z2.r*Math.cos(ang)-d2.Z2.i*Math.sin(ang), y: d2.Z2.r*Math.sin(ang)+d2.Z2.i*Math.cos(ang)};
+      return {x: d2.Z0.r + Z2r.x, y: d2.Z0.i + Z2r.y};
+    });
+
+    const fr = freudensteinSolve(HR_c, HC_c, crankPins, rockerPins);
+    if (fr && fr.couplerLen && fr.couplerLen > 0 && fr.crankLen > 0 && fr.rockerLen > 0) {
+      freudCandidates.push({...cand, fr, HR_c, HC_c, crankPins, rockerPins});
+    }
+  }
+  logMsg(`Freudenstein: ${freudCandidates.length} valid link-length sets`, freudCandidates.length > 0 ? 'ok' : 'warn');
+
+  document.getElementById('pb').style.width = '20%';
+  await new Promise(r => setTimeout(r, 10));
+
+  // DE Optimization phase: fine-tune pivot positions and link lengths
+  logMsg('Phase 3: Differential Evolution optimization', 'info');
+  document.getElementById('smsg').textContent = 'DE optimization running...';
+
+  const tgts = [...precisionPts];
+  const bounds = makeBounds();
+  let best = null, bestCost = Infinity;
+
+  // Use Burmester/Freudenstein results as seed hints for DE bounds
+  // Also try from scratch for robustness
+  for (const sign of [1, -1]) {
+    const fn = v => costFn(v, sign, tgts);
+    let pop = 60, gen = 600;
+
+    // Seed population with Freudenstein candidates
+    let seedP = null;
+    if (freudCandidates.length > 0) {
+      const fc = freudCandidates[0];
+      const [tsx1,tsy1] = w2s(tgts[0].x, tgts[0].y);
+      const [tsx2,tsy2] = w2s(tgts[1].x, tgts[1].y);
+      const [tsx3,tsy3] = w2s(tgts[2].x, tgts[2].y);
+      const [tsx4,tsy4] = w2s(tgts[3].x, tgts[3].y);
+      // Map Burmester world coords to canvas coords
+      const [hr_sx, hr_sy] = w2s(fc.HR_c.x, fc.HR_c.y);
+      const [hc_sx, hc_sy] = w2s(fc.HC_c.x, fc.HC_c.y);
+      const R = fc.fr;
+      // Canvas-scale lengths
+      const scaleFactor = camScale;
+      seedP = [
+        hr_sx, hr_sy, hc_sx, hc_sy,
+        R.crankLen*scaleFactor, R.couplerLen*scaleFactor, R.rockerLen*scaleFactor,
+        R.crankLen*0.8*scaleFactor, 0,
+        Math.atan2(tsy1-hr_sy, tsx1-hr_sx),
+        Math.atan2(tsy2-hr_sy, tsx2-hr_sx),
+        Math.atan2(tsy3-hr_sy, tsx3-hr_sx),
+        Math.atan2(tsy4-hr_sy, tsx4-hr_sx)
+      ];
+    }
+
+    let {vec, cost:c} = de(fn, bounds, pop, gen, prog => {
+      document.getElementById('pb').style.width = (20 + prog*35 + (sign===1?0:35)) + '%';
+    });
+    if (c < 1e11) {
+      const ls = localSearch(vec, fn, bounds);
+      if (ls.cost < c) { vec = ls.vec; c = ls.cost; }
+    }
+    if (c < bestCost) { bestCost = c; best = {vec, sign}; }
+  }
+
+  document.getElementById('pb').style.width = '100%';
+  await new Promise(r => setTimeout(r, 40));
+
+  if (best && bestCost < 1e11) {
+    const [a0x,a0y,b0x,b0y,r1,r2,r3,cp,cd,t1,t2,t3,t4] = best.vec;
+    const HR = {x:a0x,y:a0y}, HC = {x:b0x,y:b0y};
+    const gd = dist(HR,HC);
+    const rms = Math.sqrt(bestCost/4);
+
+    // Grashof criterion
+    const lens = [gd,r1,r2,r3].sort((a,b)=>a-b);
+    const grashof = (lens[0]+lens[3]) <= (lens[1]+lens[2]);
+    isRocker = !grashof;
+
+    linkage = buildLinkageFromVec(best.vec);
+    linkage.HR = HR; linkage.HC = HC;
+    linkage.grashof = grashof;
+    linkage.sign = best.sign;
+    linkage.thetas = [t1,t2,t3,t4];
+    validArcs = buildValidArcs(linkage, best.sign);
+
+    // Log Freudenstein results if available
+    if (freudCandidates.length > 0) {
+      const fr = freudCandidates[0].fr;
+      logMsg(`Freudenstein K1=${fr.K1.toFixed(3)}, K2=${fr.K2.toFixed(3)}, K3=${fr.K3.toFixed(3)}`, 'ok');
+    }
+    logMsg(`DE converged: RMS error = ${rms.toFixed(2)} px`, 'ok');
+    logMsg(`Crank=${r1.toFixed(1)}, Coupler=${r2.toFixed(1)}, Rocker=${r3.toFixed(1)}, Ground=${gd.toFixed(1)}`, 'ok');
+    logMsg(`Grashof: ${grashof ? 'SATISFIED ✓' : 'NOT SATISFIED'}`, grashof ? 'ok' : 'warn');
+
+    // Update UI
+    document.getElementById('sbadge').textContent = 'done';
+    document.getElementById('sbadge').className = 'status-badge badge-ok';
+    document.getElementById('smsg').textContent = `RMS: ${rms.toFixed(1)} px`;
+
+    document.getElementById('panel-results').style.opacity = '1';
+    document.getElementById('panel-results').style.pointerEvents = 'auto';
+    document.getElementById('panel-anim').style.opacity = '1';
+    document.getElementById('panel-anim').style.pointerEvents = 'auto';
+    document.getElementById('phase-ind').textContent = 'SYNTHESIS COMPLETE';
+    document.getElementById('hint').textContent = 'Drag middle-click to pan · Scroll to zoom';
+
+    // Freudenstein annotation
+    const frNote = freudCandidates.length > 0 ? `
+      <div class="info-row"><span class="label">Freudenstein K₁</span><span class="value">${freudCandidates[0].fr.K1.toFixed(3)}</span></div>
+      <div class="info-row"><span class="label">Freudenstein K₂</span><span class="value">${freudCandidates[0].fr.K2.toFixed(3)}</span></div>
+      <div class="info-row"><span class="label">Freudenstein K₃</span><span class="value">${freudCandidates[0].fr.K3.toFixed(3)}</span></div>
+    ` : '';
+
+    document.getElementById('linkage-info').innerHTML = `
+      <div class="info-row"><span class="label">Crank (l₂)</span><span class="value">${r1.toFixed(2)} px</span></div>
+      <div class="info-row"><span class="label">Coupler (l₃)</span><span class="value">${r2.toFixed(2)} px</span></div>
+      <div class="info-row"><span class="label">Rocker (l₄)</span><span class="value">${r3.toFixed(2)} px</span></div>
+      <div class="info-row"><span class="label">Ground (l₁)</span><span class="value">${gd.toFixed(2)} px</span></div>
+      <div class="info-row"><span class="label">RMS Error</span><span class="value">${rms.toFixed(2)} px</span></div>
+      ${frNote}
+      <div class="info-row"><span class="label">Grashof</span><span class="value"><span class="grashof-badge ${grashof?'grashof-ok':'grashof-fail'}">${grashof?'YES':'NO'}</span></span></div>
+      <div class="info-row"><span class="label">Type</span><span class="value">${grashof?'Crank-Rocker':'Rocker-Rocker'}</span></div>
+    `;
+
+    couplerCurve = [];
+    crankAngle = validArcs.length > 0 ? validArcs[0][0] : 0;
+    phase = 3;
+    startAnim();
+  } else {
+    document.getElementById('sbadge').textContent = 'retry';
+    document.getElementById('sbadge').className = 'status-badge badge-warn';
+    document.getElementById('smsg').textContent = 'No solution — try repositioning points';
+    document.getElementById('phase-ind').textContent = 'SYNTHESIS FAILED';
+    logMsg('Optimization did not converge. Try spreading points wider.', 'warn');
+  }
+
+  document.getElementById('prog').style.display = 'none';
+  document.getElementById('btn-synthesize').disabled = false;
+  busy = false;
+  draw();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ANIMATION
+// ═══════════════════════════════════════════════════════════════
+function startAnim() {
+  if (animId) cancelAnimationFrame(animId);
+  if (!validArcs.length) return;
+  animArcI = 0; animPosI = 0;
+  animating = true;
+  document.getElementById('play-btn').textContent = '⏸';
+  function frame() {
+    if (!animating) return;
+    const arc = validArcs[animArcI];
+    crankAngle = arc[animPosI];
+    document.getElementById('crank-slider').value = (crankAngle*180/Math.PI+360)%360;
+    animPosI++;
+    if (animPosI >= arc.length) { animPosI=0; animArcI=(animArcI+1)%validArcs.length; }
+    draw();
+    const speed = parseFloat(document.getElementById('speed-slider').value);
+    // Skip frames at higher speed
+    const skip = Math.max(1, Math.floor(speed));
+    for (let s=1;s<skip;s++) {
+      animPosI++;
+      if (animPosI >= arc.length) { animPosI=0; animArcI=(animArcI+1)%validArcs.length; }
+    }
+    animId = requestAnimationFrame(frame);
+  }
+  animId = requestAnimationFrame(frame);
+}
+
+function togglePlay() {
+  animating = !animating;
+  document.getElementById('play-btn').textContent = animating ? '⏸' : '▶';
+  if (animating) startAnim();
+  else if (animId) { cancelAnimationFrame(animId); animId=null; }
+}
+
+function sliderMove(val) {
+  crankAngle = val*Math.PI/180;
+  draw();
+}
+
+function toggleCoupler() {
+  showCoupler = !showCoupler;
+  if (showCoupler) couplerCurve = [];
+  draw();
+}
+
+document.getElementById('speed-slider').addEventListener('input', function() {
+  document.getElementById('speed-val').textContent = this.value + '×';
+});
+
+// ═══════════════════════════════════════════════════════════════
+// DRAWING
+// ═══════════════════════════════════════════════════════════════
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawAxes();
+  if (phase >= 1) drawPrecisionPoints();
+  if (phase >= 3 && linkage) drawLinkage();
+}
+
+function drawAxes() {
+  const [ox,oy] = w2s(0,0);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,229,255,0.12)';
+  ctx.lineWidth = 1; ctx.setLineDash([4,8]);
+  ctx.beginPath(); ctx.moveTo(0,oy); ctx.lineTo(canvas.width,oy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ox,0); ctx.lineTo(ox,canvas.height); ctx.stroke();
+  ctx.setLineDash([]); ctx.restore();
+}
+
+function drawPrecisionPoints() {
+  precisionPts.forEach((p,i) => {
+    const [sx,sy] = w2s(p.x, p.y);
+    ctx.save();
+    const grd = ctx.createRadialGradient(sx,sy,0,sx,sy,20);
+    grd.addColorStop(0, COLORS[i]+'50');
+    grd.addColorStop(1,'transparent');
+    ctx.fillStyle = grd;
+    ctx.beginPath(); ctx.arc(sx,sy,20,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = COLORS[i];
+    ctx.shadowColor = COLORS[i]; ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.arc(sx,sy,7,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.shadowBlur = 0; ctx.stroke();
+    ctx.fillStyle = COLORS[i];
+    ctx.font = 'bold 13px Syne, sans-serif';
+    ctx.fillText(LABELS[i], sx+11, sy-8);
+    ctx.restore();
+  });
+}
+
+function drawLink(p1, p2, color, width=3) {
+  ctx.save();
+  ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineCap = 'round';
+  ctx.shadowColor = color; ctx.shadowBlur = 8;
+  ctx.beginPath(); ctx.moveTo(...p1); ctx.lineTo(...p2); ctx.stroke();
+  ctx.restore();
+}
+
+function drawPivot(p, color, r=7) {
+  ctx.save();
+  ctx.shadowColor = color; ctx.shadowBlur = 12;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(...p, r, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.shadowBlur = 0;
+  ctx.stroke(); ctx.restore();
+}
+
+function drawGroundPin(p, color) {
+  ctx.save();
+  ctx.strokeStyle = color; ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 2;
+  const [x,y] = p;
+  ctx.beginPath();
+  ctx.moveTo(x,y+5); ctx.lineTo(x-9,y+15); ctx.lineTo(x+9,y+15); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  for (let i=-9;i<=9;i+=4) {
+    ctx.beginPath(); ctx.moveTo(x-9+i,y+15); ctx.lineTo(x-13+i,y+21); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawLinkage() {
+  const pos = computePos(crankAngle, linkage, linkage.sign);
+
+  // Coupler curve
+  if (showCoupler && pos) {
+    couplerCurve.push({...pos.C});
+    if (couplerCurve.length > 1000) couplerCurve.shift();
+  }
+
+  if (showCoupler && couplerCurve.length > 1) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(couplerCurve[0].x, couplerCurve[0].y);
+    couplerCurve.forEach((p,i) => { if(i>0) ctx.lineTo(p.x, p.y); });
+    ctx.strokeStyle = 'rgba(168,255,120,0.35)'; ctx.lineWidth = 1.5;
+    ctx.stroke(); ctx.restore();
+  }
+
+  // Draw full trace path
+  if (validArcs.length > 0) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0,229,255,0.2)'; ctx.lineWidth = 1;
+    validArcs.forEach(arc => {
+      ctx.beginPath();
+      arc.forEach((th,i) => {
+        const pt = computePos(th, linkage, linkage.sign);
+        if (!pt) return;
+        i===0 ? ctx.moveTo(pt.C.x,pt.C.y) : ctx.lineTo(pt.C.x,pt.C.y);
+      });
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  if (!pos) return;
+  const {A, B, C} = pos;
+  const HR = linkage.HR, HC = linkage.HC;
+
+  const sHR = [HR.x, HR.y];
+  const sHC = [HC.x, HC.y];
+  const sA = [A.x, A.y];
+  const sB = [B.x, B.y];
+  const sC = [C.x, C.y];
+
+  // Ground dashed
+  ctx.save();
+  ctx.strokeStyle = 'rgba(136,136,136,0.25)'; ctx.lineWidth = 1; ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(...sHR); ctx.lineTo(...sHC); ctx.stroke();
+  ctx.setLineDash([]); ctx.restore();
+
+  drawLink(sHR, sA, '#ff6b35', 4);    // Crank
+  drawLink(sA, sB, '#00e5ff', 4);     // Coupler
+  drawLink(sHC, sB, '#a8ff78', 4);    // Rocker
+  drawLink(sA, sC, 'rgba(0,229,255,0.3)', 2);  // Coupler point arm
+  // 1. Draw the Solid Coupler Triangle (A-B-C)
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(...sA);
+  ctx.lineTo(...sB);
+  ctx.lineTo(...sC);
+  ctx.closePath();
+  
+  // Fill with a semi-transparent cyan to show it's a solid plate
+  ctx.fillStyle = 'rgba(0, 229, 255, 0.15)'; 
+  ctx.fill();
+  
+  // Draw the borders of the triangle
+  ctx.strokeStyle = '#00e5ff';
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  ctx.restore();
+
+  // 2. Draw the primary links on top
+  drawLink(sHR, sA, '#ff6b35', 4);    // Crank
+  drawLink(sHC, sB, '#a8ff78', 4);    // Rocker
+  
+  // Redraw A-B over the triangle to maintain the consistent link width
+  drawLink(sA, sB, '#00e5ff', 4);
+
+  drawGroundPin(sHR, '#ff6b35');
+  drawGroundPin(sHC, '#a8ff78');
+  drawPivot(sHR, '#ff6b35', 8);
+  drawPivot(sHC, '#a8ff78', 8);
+  drawPivot(sA, '#ffffff', 6);
+  drawPivot(sB, '#ffffff', 6);
+
+  // Coupler point C (glowing)
+  ctx.save();
+  const near = linkage.thetas.some(th => Math.abs(((crankAngle-th+Math.PI)%(2*Math.PI))-Math.PI)<0.12);
+  const grd = ctx.createRadialGradient(...sC, 0, ...sC, 16);
+  grd.addColorStop(0, (near ? 'rgba(255,107,53,0.7)' : 'rgba(168,255,120,0.7)'));
+  grd.addColorStop(1, 'transparent');
+  ctx.fillStyle = grd;
+  ctx.beginPath(); ctx.arc(...sC, 16, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = near ? '#ff6b35' : '#a8ff78';
+  ctx.shadowColor = near ? '#ff6b35' : '#a8ff78'; ctx.shadowBlur = 12;
+  ctx.beginPath(); ctx.arc(...sC, 5, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.shadowBlur = 0;
+  ctx.stroke();
+  if (near) {
+    ctx.strokeStyle = '#ff6b35'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(...sC, 13, 0, Math.PI*2); ctx.stroke();
+  }
+  ctx.restore();
+
+  // Labels
+  ctx.save();
+  ctx.font = '11px Space Mono, monospace';
+  ctx.fillStyle = '#ff6b35'; ctx.fillText('H_R', sHR[0]+10, sHR[1]-12);
+  ctx.fillStyle = '#a8ff78'; ctx.fillText('H_C', sHC[0]+10, sHC[1]-12);
+  ctx.fillStyle = '#ccc';
+  ctx.fillText('A', sA[0]+9, sA[1]-8);
+  ctx.fillText('B', sB[0]+9, sB[1]-8);
+  ctx.fillStyle = '#a8ff78'; ctx.fillText('C', sC[0]+9, sC[1]-8);
+  ctx.restore();
+
+  // Legend
+  ctx.save();
+  ctx.font = '10px Space Mono, monospace';
+  const leg = [['#ff6b35','Crank'],['#00e5ff','Coupler'],['#a8ff78','Rocker']];
+  let lx=14;
+  leg.forEach(([col,lbl]) => {
+    ctx.strokeStyle=col; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(lx,14); ctx.lineTo(lx+18,14); ctx.stroke();
+    ctx.fillStyle=col; ctx.fillText(lbl,lx+24,18);
+    lx+=80;
+  });
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RESET
+// ═══════════════════════════════════════════════════════════════
+function resetAll() {
+  precisionPts=[]; linkage=null; couplerCurve=[]; validArcs=[];
+  phase=1; crankAngle=0; isRocker=false; busy=false;
+  animating=false;
+  if (animId){cancelAnimationFrame(animId);animId=null;}
+  document.getElementById('play-btn').textContent='▶';
+  for(let i=0;i<4;i++){
+    document.getElementById(`pc-${i}`).textContent='— not placed —';
+    document.getElementById(`pi-${i}`).classList.remove('active');
+    const inp = document.getElementById(`coord-${i}`);
+    if (inp) inp.value = '';
+  }
+  document.getElementById('btn-synthesize').disabled=true;
+  document.getElementById('panel-results').style.opacity='0.4';
+  document.getElementById('panel-results').style.pointerEvents='none';
+  document.getElementById('panel-anim').style.opacity='0.4';
+  document.getElementById('panel-anim').style.pointerEvents='none';
+  document.getElementById('phase-ind').textContent='PHASE 1 · PLACE POINTS';
+  document.getElementById('hint').textContent='Click to place C₁';
+  document.getElementById('sbadge').textContent='place points';
+  document.getElementById('sbadge').className='status-badge badge-info';
+  document.getElementById('smsg').textContent='';
+  document.getElementById('prog').style.display='none';
+  document.getElementById('pb').style.width='0%';
+  document.getElementById('linkage-info').innerHTML='<div style="font-size:10px;color:var(--muted)">— synthesize to see results —</div>';
+  document.getElementById('log').innerHTML='<span class="log-info">→ Place 4 precision points on the canvas</span>';
+  draw();
+}
+
+draw();
+</script>
+</body>
+</html>
